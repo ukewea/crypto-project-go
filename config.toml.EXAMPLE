@@ -1,0 +1,15 @@
+[database]
+host = "localhost"
+port = 5432
+username = "user"
+password = "pwd"
+db_name = "crypto_data"
+
+[cryptocompare]
+api_key = "key_from_cryptocompare"
+
+[fetch]
+trading_symbols = ["BTC", "DOGE", "ETH"]
+vs_currency = "USD"
+limit_daily = 7
+limit_hourly = 24
