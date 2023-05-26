@@ -19,12 +19,20 @@ type CryptoOHLCV struct {
 	VolumeTo      decimal.Decimal `gorm:"type:numeric;not null"`
 }
 
+type CryptoOHLCVMinute struct {
+	CryptoOHLCV
+}
+
 type CryptoOHLCVHourly struct {
 	CryptoOHLCV
 }
 
 type CryptoOHLCVDaily struct {
 	CryptoOHLCV
+}
+
+func (CryptoOHLCVMinute) TableName() string {
+	return "crypto_ohlcv_minute_go"
 }
 
 func (CryptoOHLCVHourly) TableName() string {

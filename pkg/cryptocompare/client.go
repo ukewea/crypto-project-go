@@ -76,7 +76,7 @@ func (c *Client) FetchDailyOHLCVData(tradingSymbol, vsCurrency string, limit int
 }
 
 // FetchAllAllMinuteOHLCVData fetches all minute-level OHLCV data
-func (c *Client) FetchAllAllMinuteOHLCVData(tradingSymbol, vsCurrency string) ([]OHLCVData, error) {
+func (c *Client) FetchAllMinuteOHLCVData(tradingSymbol, vsCurrency string) ([]OHLCVData, error) {
 	c.logger.Trace("Fetching all minute-level OHLCV data")
 	return c.fetchAllOHLCVData(tradingSymbol, vsCurrency, histominuteEndpoint)
 }
@@ -97,6 +97,7 @@ func (c *Client) FetchAllDailyOHLCVData(tradingSymbol, vsCurrency string) ([]OHL
 func (c *Client) fetchAllOHLCVData(tradingSymbol, vsCurrency string, endpoint string) ([]OHLCVData, error) {
 	c.logger.Info("Starting fetchAllOHLCVData request.")
 	var allData []OHLCVData
+	var err error = nil
 
 	// Add 5 seconds to avoid losing data due to time difference
 	var toTs int64 = time.Now().Unix() + 5
@@ -109,10 +110,11 @@ func (c *Client) fetchAllOHLCVData(tradingSymbol, vsCurrency string, endpoint st
 			baseURL, endpoint, tradingSymbol, vsCurrency, apiMaxLimit, toTs, c.apiKey)
 		c.logger.Trace("URL: ", url)
 
-		resp, err := c.getOHLCVResponseFromApi(url)
+		var resp *CryptoResponse
+		resp, err = c.getOHLCVResponseFromApi(url)
 		if err != nil {
 			c.logger.Errorf("Error in getOHLCVResponseFromApi for %s/%s: %v", tradingSymbol, vsCurrency, err)
-			return nil, err
+			break
 		}
 
 		data := resp.Data.Data
@@ -135,13 +137,21 @@ func (c *Client) fetchAllOHLCVData(tradingSymbol, vsCurrency string, endpoint st
 		time.Sleep(10 * time.Second)
 	}
 
-	c.logger.Infof("Completed fetchAllOHLCVData request for %s/%s, len: %d", tradingSymbol, vsCurrency, len(allData))
+	if len(allData) == 0 {
+		return nil, err
+	}
 
 	sort.Slice(allData, func(i, j int) bool {
 		return allData[i].Time < allData[j].Time
 	})
 
-	return allData, nil
+	if err != nil {
+		c.logger.Warnf("fetchAllOHLCVData request for %s/%s breaked early, return data it fetched so far, len: %d", tradingSymbol, vsCurrency, len(allData))
+	} else {
+		c.logger.Infof("Completed fetchAllOHLCVData request for %s/%s, len: %d", tradingSymbol, vsCurrency, len(allData))
+	}
+
+	return allData, err
 }
 
 func (c *Client) fetchOHLCVData(tradingSymbol, vsCurrency string, limit int, endpoint string) ([]OHLCVData, error) {
