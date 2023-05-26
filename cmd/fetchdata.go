@@ -34,6 +34,9 @@ type saveJob struct {
 }
 
 func main() {
+	fetchAll := flag.Bool("fetch-all", false, "Fetch all data")
+	flag.Parse()
+
 	log := logrus.New()
 	log.Out = os.Stdout
 	log.Level = logrus.DebugLevel
@@ -47,17 +50,7 @@ func main() {
 	log.Debug("Config loaded successfully")
 
 	log.Debug("Connecting to DB")
-	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%d sslmode=disable TimeZone=Asia/Taipei",
-		conf.Database.Host, conf.Database.Username, conf.Database.Password, conf.Database.DBName, conf.Database.Port)
-
-	// Mask password in logs
-	log.Trace("DSN: ", strings.Replace(dsn, conf.Database.Password, "***(masked)***", 1))
-
-	tradingSymbols := conf.Fetch.TradingSymbols
-	vsCurrency := conf.Fetch.VSCurrency
-	client := cryptocompare.NewClient(conf.Cryptocompare.APIKey, log)
-
-	db, err := db.NewDB(dsn, log)
+	db, err := connectToDB(conf, log)
 	if err != nil {
 		log.Fatalf("Failed to connect to DB: %v", err)
 		panic(err)
@@ -65,29 +58,22 @@ func main() {
 
 	log.Debug("Successfully connected to DB")
 
-	fetchAll := flag.Bool("fetch-all", false, "Fetch all data")
-	flag.Parse()
-	var limits []int
-
-	if *fetchAll {
-		log.Warnf("Fetching all data for symbols: %v", tradingSymbols)
-		// set limits to -1 to fetch all data
-		limits = []int{-1, -1, -1}
-	} else {
-		log.Infof("Fetching recent data for symbols: %v", tradingSymbols)
-		log.Infof("Limits: hourly=%d, daily=%d, minute=%d", conf.Fetch.LimitHourly, conf.Fetch.LimitDaily, conf.Fetch.LimitMinute)
-		limits = []int{conf.Fetch.LimitHourly, conf.Fetch.LimitDaily, conf.Fetch.LimitMinute}
-	}
+	timeframes, limits := getTimeframesAndLimits(fetchAll, conf, log)
+	tradingSymbols := conf.Fetch.TradingSymbols
+	vsCurrency := conf.Fetch.VSCurrency
 
 	downloadChannel := make(chan downloadJob, 10)
 	saveChannel := make(chan saveJob, 10)
 	var wg sync.WaitGroup
 
-	go downloadWorker(downloadChannel, saveChannel, client, log)
+	defer close(downloadChannel)
+	defer close(saveChannel)
+
+	go downloadWorker(downloadChannel, saveChannel, conf.Cryptocompare.APIKey, log)
 	go saveWorker(saveChannel, db, log)
 
 	for _, symbol := range tradingSymbols {
-		for i, timeframe := range []string{"hourly", "daily", "minute"} {
+		for i, timeframe := range timeframes {
 			wg.Add(1)
 			downloadChannel <- downloadJob{
 				symbol:     symbol,
@@ -104,7 +90,42 @@ func main() {
 	log.Infof("Data fetch completed for symbols: %v", tradingSymbols)
 }
 
-func downloadWorker(downloadChannel chan downloadJob, saveChannel chan saveJob, client *cryptocompare.Client, log *logrus.Logger) {
+// connectToDB connects to the database and returns a db.DB object on success
+func connectToDB(conf *config.Config, log *logrus.Logger) (*db.DB, error) {
+	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%d sslmode=disable TimeZone=Asia/Taipei",
+		conf.Database.Host, conf.Database.Username, conf.Database.Password, conf.Database.DBName, conf.Database.Port)
+
+	// Mask password in logs
+	log.Trace("DSN: ", strings.Replace(dsn, conf.Database.Password, "***(masked)***", 1))
+
+	return db.NewDB(dsn, log)
+}
+
+// getTimeframesAndLimits returns timeframes and limits when downloading data
+func getTimeframesAndLimits(fetchAll *bool, conf *config.Config, log *logrus.Logger) ([]string, []int) {
+	// timeframes 有三個值，分別是 hourly, daily, minute，用來決定要下載哪個時間區間的資料
+	// 1. 理論上只要 minutes 就可以推算出 hourly 和 daily 的資料
+	//    但是 cryptocompare 的 API 限制 minute 資料只能取最近 7 天
+	// 2. daily 理論上可以由 hourly 推算出來，但是有現成 API 可以用，就不自己算了
+	timeframes := []string{"hourly", "daily", "minute"}
+	var limits []int
+	tradingSymbols := conf.Fetch.TradingSymbols
+
+	if *fetchAll {
+		log.Warnf("Fetching all data for symbols: %v", tradingSymbols)
+		// set limits to -1 to fetch all data
+		limits = []int{-1, -1, -1}
+	} else {
+		log.Infof("Fetching recent data for symbols: %v", tradingSymbols)
+		log.Infof("Limits: hourly=%d, daily=%d, minute=%d", conf.Fetch.LimitHourly, conf.Fetch.LimitDaily, conf.Fetch.LimitMinute)
+		limits = []int{conf.Fetch.LimitHourly, conf.Fetch.LimitDaily, conf.Fetch.LimitMinute}
+	}
+
+	return timeframes, limits
+}
+
+// downloadWorker downloads data from cryptocompare and sends it to saveChannel
+func downloadWorker(downloadChannel chan downloadJob, saveChannel chan saveJob, apiKey string, log *logrus.Logger) {
 	for job := range downloadChannel {
 		func() {
 			defer job.wg.Done()
@@ -112,6 +133,8 @@ func downloadWorker(downloadChannel chan downloadJob, saveChannel chan saveJob, 
 			log.Infof("Fetching %s data of %s/%s", job.timeframe, job.symbol, job.vsCurrency)
 			var data []cryptocompare.OHLCVData
 			var err error
+
+			client := cryptocompare.NewClient(apiKey, log)
 			fetchAll := job.limit < 0
 
 			switch job.timeframe {
@@ -164,6 +187,7 @@ func downloadWorker(downloadChannel chan downloadJob, saveChannel chan saveJob, 
 	}
 }
 
+// saveWorker gets data from downloadWorker and saves it to DB
 func saveWorker(saveChannel chan saveJob, db *db.DB, log *logrus.Logger) {
 	for job := range saveChannel {
 		func() {
@@ -212,6 +236,7 @@ func saveWorker(saveChannel chan saveJob, db *db.DB, log *logrus.Logger) {
 	}
 }
 
+// mapOHLCVData maps cryptocompare.OHLCVData to models.CryptoOHLCV
 func mapOHLCVData(src *cryptocompare.OHLCVData, symbol string, vsCurrency string) models.CryptoOHLCV {
 	return models.CryptoOHLCV{
 		TradingSymbol: symbol,
@@ -226,6 +251,7 @@ func mapOHLCVData(src *cryptocompare.OHLCVData, symbol string, vsCurrency string
 	}
 }
 
+// removeInvalidOHLCVData removes OHLCV data with all zero price values
 func removeInvalidOHLCVData(data []cryptocompare.OHLCVData) []cryptocompare.OHLCVData {
 	zero := decimal.NewFromInt(0)
 

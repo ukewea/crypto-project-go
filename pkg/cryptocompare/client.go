@@ -123,7 +123,7 @@ func (c *Client) fetchAllOHLCVData(tradingSymbol, vsCurrency string, endpoint st
 			break
 		}
 
-		if isVolumeFromZero(data) {
+		if isVolumeFromZeroInDataSet(data) {
 			if len(data) != 0 {
 				c.logger.Warnf("Encountered fake dataset for %s/%s in fetchAllOHLCVData, stop the iteration", tradingSymbol, vsCurrency)
 			}
@@ -191,7 +191,7 @@ func (c *Client) getOHLCVResponseFromApi(url string) (*CryptoResponse, error) {
 	return &cr, nil
 }
 
-func isVolumeFromZero(data []OHLCVData) bool {
+func isVolumeFromZeroInDataSet(data []OHLCVData) bool {
 	for _, d := range data {
 		if !d.VolumeFrom.IsZero() {
 			return false
