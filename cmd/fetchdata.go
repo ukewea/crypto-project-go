@@ -137,33 +137,39 @@ func downloadWorker(downloadChannel chan downloadJob, saveChannel chan saveJob, 
 			client := cryptocompare.NewClient(apiKey, log)
 			fetchAll := job.limit < 0
 
-			switch job.timeframe {
-			case "hourly":
-				if fetchAll {
-					data, err = client.FetchAllHourlyOHLCVData(job.symbol, job.vsCurrency)
+			funcsFetchAll := map[string]func(string, string) ([]cryptocompare.OHLCVData, error){
+				"hourly": client.FetchAllHourlyOHLCVData,
+				"daily":  client.FetchAllDailyOHLCVData,
+				"minute": client.FetchAllMinuteOHLCVData,
+			}
+
+			funcsFetchLimit := map[string]func(string, string, int) ([]cryptocompare.OHLCVData, error){
+				"hourly": client.FetchHourlyOHLCVData,
+				"daily":  client.FetchDailyOHLCVData,
+				"minute": client.FetchMinuteOHLCVData,
+			}
+
+			if fetchAll {
+				if fetchAllFunc, ok := funcsFetchAll[job.timeframe]; !ok {
+					log.Errorf("Invalid timeframe of fetch all job: %s", job.timeframe)
+					return
 				} else {
-					data, err = client.FetchHourlyOHLCVData(job.symbol, job.vsCurrency, job.limit)
+					data, err = fetchAllFunc(job.symbol, job.vsCurrency)
 				}
-			case "daily":
-				if fetchAll {
-					data, err = client.FetchAllDailyOHLCVData(job.symbol, job.vsCurrency)
+			} else {
+				if fetchLimitFunc, ok := funcsFetchLimit[job.timeframe]; !ok {
+					log.Errorf("Invalid timeframe of fetch limit job: %s", job.timeframe)
+					return
 				} else {
-					data, err = client.FetchDailyOHLCVData(job.symbol, job.vsCurrency, job.limit)
+					data, err = fetchLimitFunc(job.symbol, job.vsCurrency, job.limit)
 				}
-			case "minute":
-				if fetchAll {
-					data, err = client.FetchAllMinuteOHLCVData(job.symbol, job.vsCurrency)
-				} else {
-					data, err = client.FetchMinuteOHLCVData(job.symbol, job.vsCurrency, job.limit)
-				}
-			default:
-				log.Errorf("Invalid timeframe: %s", job.timeframe)
-				return
 			}
 
 			if data == nil && err != nil {
 				log.Errorf("Failed to fetch %s data of %s/%s, error: %v", job.timeframe, job.symbol, job.vsCurrency, err)
 				return
+			} else if data == nil {
+				log.Errorf("No error returned but data is nil when fetching %s data of %s/%s", job.timeframe, job.symbol, job.vsCurrency)
 			} else if err != nil {
 				log.Warnf("Failed to completely fetch %s data of %s/%s, but we will still save the data we have downloaded, error: %v",
 					job.timeframe, job.symbol, job.vsCurrency, err)
