@@ -4,6 +4,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"crypto_project/pkg/models"
 )
@@ -20,17 +21,21 @@ func NewDB(dsn string, logger *logrus.Logger) (*DB, error) {
 		return nil, err
 	}
 
-	db.AutoMigrate(&models.CryptoOHLCVMinute{})
-	db.AutoMigrate(&models.CryptoOHLCVHourly{})
-	db.AutoMigrate(&models.CryptoOHLCVDaily{})
+	db.AutoMigrate(&models.CryptoOHLCVMinute{}, &models.CryptoOHLCVHourly{}, &models.CryptoOHLCVDaily{})
 
 	return &DB{db, logger}, nil
 }
 
-func (db *DB) SaveMinuteOHLCData(data []models.CryptoOHLCVMinute) error {
+func (db *DB) UpsertMinuteOHLCData(data []models.CryptoOHLCVMinute) error {
 	db.Logger.Trace("Starting saving minute data")
+	clauses := db.Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "trading_symbol"}, {Name: "vs_currency"}, {Name: "timestamp"}},
+		DoUpdates: clause.AssignmentColumns([]string{
+			"open", "high", "low", "close", "volume_from", "volume_to",
+		}),
+	})
 	for _, d := range data {
-		if err := db.Save(&d).Error; err != nil {
+		if err := clauses.Create(&d).Error; err != nil {
 			db.Logger.Errorf("Error saving minute data: %v", err)
 			return err
 		}
@@ -39,10 +44,16 @@ func (db *DB) SaveMinuteOHLCData(data []models.CryptoOHLCVMinute) error {
 	return nil
 }
 
-func (db *DB) SaveHourlyOHLCData(data []models.CryptoOHLCVHourly) error {
+func (db *DB) UpsertHourlyOHLCData(data []models.CryptoOHLCVHourly) error {
 	db.Logger.Trace("Starting saving hourly data")
+	clauses := db.Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "trading_symbol"}, {Name: "vs_currency"}, {Name: "timestamp"}},
+		DoUpdates: clause.AssignmentColumns([]string{
+			"open", "high", "low", "close", "volume_from", "volume_to",
+		}),
+	})
 	for _, d := range data {
-		if err := db.Save(&d).Error; err != nil {
+		if err := clauses.Create(&d).Error; err != nil {
 			db.Logger.Errorf("Error saving hourly data: %v", err)
 			return err
 		}
@@ -51,10 +62,16 @@ func (db *DB) SaveHourlyOHLCData(data []models.CryptoOHLCVHourly) error {
 	return nil
 }
 
-func (db *DB) SaveDailyOHLCData(data []models.CryptoOHLCVDaily) error {
+func (db *DB) UpsertDailyOHLCData(data []models.CryptoOHLCVDaily) error {
 	db.Logger.Trace("Starting saving daily data")
+	clauses := db.Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "trading_symbol"}, {Name: "vs_currency"}, {Name: "timestamp"}},
+		DoUpdates: clause.AssignmentColumns([]string{
+			"open", "high", "low", "close", "volume_from", "volume_to",
+		}),
+	})
 	for _, d := range data {
-		if err := db.Save(&d).Error; err != nil {
+		if err := clauses.Create(&d).Error; err != nil {
 			db.Logger.Errorf("Error saving daily data: %v", err)
 			return err
 		}

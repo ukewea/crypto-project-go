@@ -13,6 +13,7 @@ import (
 	"crypto_project/pkg/db"
 	"crypto_project/pkg/models"
 
+	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
 )
 
@@ -111,22 +112,23 @@ func downloadWorker(downloadChannel chan downloadJob, saveChannel chan saveJob, 
 			log.Infof("Fetching %s data of %s/%s", job.timeframe, job.symbol, job.vsCurrency)
 			var data []cryptocompare.OHLCVData
 			var err error
+			fetchAll := job.limit < 0
 
 			switch job.timeframe {
 			case "hourly":
-				if job.limit < 0 {
+				if fetchAll {
 					data, err = client.FetchAllHourlyOHLCVData(job.symbol, job.vsCurrency)
 				} else {
 					data, err = client.FetchHourlyOHLCVData(job.symbol, job.vsCurrency, job.limit)
 				}
 			case "daily":
-				if job.limit < 0 {
+				if fetchAll {
 					data, err = client.FetchAllDailyOHLCVData(job.symbol, job.vsCurrency)
 				} else {
 					data, err = client.FetchDailyOHLCVData(job.symbol, job.vsCurrency, job.limit)
 				}
 			case "minute":
-				if job.limit < 0 {
+				if fetchAll {
 					data, err = client.FetchAllMinuteOHLCVData(job.symbol, job.vsCurrency)
 				} else {
 					data, err = client.FetchMinuteOHLCVData(job.symbol, job.vsCurrency, job.limit)
@@ -144,6 +146,10 @@ func downloadWorker(downloadChannel chan downloadJob, saveChannel chan saveJob, 
 					job.timeframe, job.symbol, job.vsCurrency, err)
 			} else {
 				log.Infof("Successfully fetched %s data of %s/%s, len: %d", job.timeframe, job.symbol, job.vsCurrency, len(data))
+			}
+
+			if fetchAll {
+				data = removeInvalidOHLCVData(data)
 			}
 
 			job.wg.Add(1)
@@ -174,7 +180,7 @@ func saveWorker(saveChannel chan saveJob, db *db.DB, log *logrus.Logger) {
 						CryptoOHLCV: mapOHLCVData(&d, job.symbol, job.vsCurrency),
 					}
 				}
-				err = db.SaveHourlyOHLCData(hourlyOHLCVData)
+				err = db.UpsertHourlyOHLCData(hourlyOHLCVData)
 			case "daily":
 				dailyOHLCVData := make([]models.CryptoOHLCVDaily, len(job.data))
 				for i, d := range job.data {
@@ -182,7 +188,7 @@ func saveWorker(saveChannel chan saveJob, db *db.DB, log *logrus.Logger) {
 						CryptoOHLCV: mapOHLCVData(&d, job.symbol, job.vsCurrency),
 					}
 				}
-				err = db.SaveDailyOHLCData(dailyOHLCVData)
+				err = db.UpsertDailyOHLCData(dailyOHLCVData)
 			case "minute":
 				minuteOHLCVData := make([]models.CryptoOHLCVMinute, len(job.data))
 				for i, d := range job.data {
@@ -190,7 +196,7 @@ func saveWorker(saveChannel chan saveJob, db *db.DB, log *logrus.Logger) {
 						CryptoOHLCV: mapOHLCVData(&d, job.symbol, job.vsCurrency),
 					}
 				}
-				err = db.SaveMinuteOHLCData(minuteOHLCVData)
+				err = db.UpsertMinuteOHLCData(minuteOHLCVData)
 			default:
 				log.Errorf("Invalid timeframe: %s", job.timeframe)
 				return
@@ -218,4 +224,15 @@ func mapOHLCVData(src *cryptocompare.OHLCVData, symbol string, vsCurrency string
 		VolumeFrom:    src.VolumeFrom,
 		VolumeTo:      src.VolumeTo,
 	}
+}
+
+func removeInvalidOHLCVData(data []cryptocompare.OHLCVData) []cryptocompare.OHLCVData {
+	zero := decimal.NewFromInt(0)
+
+	for i := len(data) - 1; i >= 0; i-- {
+		if data[i].Open.Equal(zero) && data[i].High.Equal(zero) && data[i].Low.Equal(zero) && data[i].Close.Equal(zero) {
+			data = append(data[:i], data[i+1:]...)
+		}
+	}
+	return data
 }
