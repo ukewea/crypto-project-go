@@ -46,7 +46,7 @@ func main() {
 		log.Debugf("Fetching hourly data for symbol: %s", symbol)
 
 		// Fetch and save hourly data
-		hourlyData, err := client.FetchHourlyOHLCData(symbol, vsCurrency, limitHourly)
+		hourlyData, err := client.FetchAllHourlyOHLCVData(symbol, vsCurrency, limitHourly)
 		if err != nil {
 			log.Errorf("Failed to fetch hourly data for symbol: %s, error: %v", symbol, err)
 			panic(err)
@@ -81,7 +81,7 @@ func main() {
 		log.Debugf("Fetching daily data for symbol: %s", symbol)
 
 		// Fetch and save daily data
-		dailyData, err := client.FetchDailyOHLCData(symbol, vsCurrency, limitDaily)
+		dailyData, err := client.FetchAllDailyOHLCVData(symbol, vsCurrency, limitDaily)
 		if err != nil {
 			log.Errorf("Failed to fetch daily data for symbol: %s, error: %v", symbol, err)
 			panic(err)
