@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/shopspring/decimal"
@@ -120,6 +121,13 @@ func (c *Client) fetchAllOHLCVData(tradingSymbol, vsCurrency string, endpoint st
 			break
 		}
 
+		if isVolumeFromZero(data) {
+			if len(data) != 0 {
+				c.logger.Warnf("Encountered fake dataset for %s/%s in fetchAllOHLCVData, stop the iteration", tradingSymbol, vsCurrency)
+			}
+			break
+		}
+
 		allData = append(allData, data...)
 		toTs = resp.Data.TimeFrom - 1
 
@@ -127,7 +135,12 @@ func (c *Client) fetchAllOHLCVData(tradingSymbol, vsCurrency string, endpoint st
 		time.Sleep(10 * time.Second)
 	}
 
-	c.logger.Infof("Completed fetchAllOHLCVData request for %s/%s.", tradingSymbol, vsCurrency)
+	c.logger.Infof("Completed fetchAllOHLCVData request for %s/%s, len: %d", tradingSymbol, vsCurrency, len(allData))
+
+	sort.Slice(allData, func(i, j int) bool {
+		return allData[i].Time < allData[j].Time
+	})
+
 	return allData, nil
 }
 
@@ -166,4 +179,13 @@ func (c *Client) getOHLCVResponseFromApi(url string) (*CryptoResponse, error) {
 	c.logger.Debugf("Successfully fetched data from URL: %s", url)
 
 	return &cr, nil
+}
+
+func isVolumeFromZero(data []OHLCVData) bool {
+	for _, d := range data {
+		if !d.VolumeFrom.IsZero() {
+			return false
+		}
+	}
+	return true
 }
