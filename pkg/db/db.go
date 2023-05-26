@@ -28,38 +28,38 @@ func NewDB(dsn string, logger *logrus.Logger) (*DB, error) {
 }
 
 func (db *DB) SaveMinuteOHLCData(data []models.CryptoOHLCVMinute) error {
-	db.Logger.Debugf("Starting saving minute data")
+	db.Logger.Trace("Starting saving minute data")
 	for _, d := range data {
 		if err := db.Save(&d).Error; err != nil {
 			db.Logger.Errorf("Error saving minute data: %v", err)
 			return err
 		}
 	}
-	db.Logger.Debugf("Successfully saved minute data")
+	db.Logger.Trace("Successfully saved minute data")
 	return nil
 }
 
 func (db *DB) SaveHourlyOHLCData(data []models.CryptoOHLCVHourly) error {
-	db.Logger.Debugf("Starting saving hourly data")
+	db.Logger.Trace("Starting saving hourly data")
 	for _, d := range data {
 		if err := db.Save(&d).Error; err != nil {
 			db.Logger.Errorf("Error saving hourly data: %v", err)
 			return err
 		}
 	}
-	db.Logger.Debugf("Successfully saved hourly data")
+	db.Logger.Trace("Successfully saved hourly data")
 	return nil
 }
 
 func (db *DB) SaveDailyOHLCData(data []models.CryptoOHLCVDaily) error {
-	db.Logger.Debugf("Starting saving daily data")
+	db.Logger.Trace("Starting saving daily data")
 	for _, d := range data {
 		if err := db.Save(&d).Error; err != nil {
 			db.Logger.Errorf("Error saving daily data: %v", err)
 			return err
 		}
 	}
-	db.Logger.Debugf("Successfully saved daily data")
+	db.Logger.Trace("Successfully saved daily data")
 	return nil
 }
 

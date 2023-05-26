@@ -18,6 +18,7 @@ type Config struct {
 		VSCurrency     string   `toml:"vs_currency"`
 		LimitDaily     int      `toml:"limit_daily"`
 		LimitHourly    int      `toml:"limit_hourly"`
+		LimitMinute    int      `toml:"limit_minute"`
 	} `toml:"fetch"`
 }
 

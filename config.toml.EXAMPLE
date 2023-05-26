@@ -13,3 +13,4 @@ trading_symbols = ["BTC", "DOGE", "ETH"]
 vs_currency = "USD"
 limit_daily = 7
 limit_hourly = 24
+limit_minute = 1500
