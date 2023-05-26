@@ -35,10 +35,15 @@ type OHLCVData struct {
 }
 
 type CryptoResponse struct {
-	Response string `json:"Response"`
-	Message  string `json:"Message"`
-	Data     struct {
-		Data []OHLCVData `json:"Data"`
+	Response   string `json:"Response"`
+	Message    string `json:"Message"`
+	HasWarning bool   `json:"HasWarning"`
+	Type       int    `json:"Type"`
+	Data       struct {
+		Aggregated bool        `json:"Aggregated"`
+		TimeFrom   int64       `json:"TimeFrom"`
+		TimeTo     int64       `json:"TimeTo"`
+		Data       []OHLCVData `json:"Data"`
 	} `json:"Data"`
 }
 
@@ -89,45 +94,55 @@ func (c *Client) FetchAllDailyOHLCVData(tradingSymbol, vsCurrency string) ([]OHL
 
 // fetchAllOHLCVData fetches all available OHLCV data of a specific frequency from the CryptoCompare API.
 func (c *Client) fetchAllOHLCVData(tradingSymbol, vsCurrency string, endpoint string) ([]OHLCVData, error) {
-	var allData []OHLCVData
-	var toTs int64 = time.Now().Unix()
-
 	c.logger.Info("Starting fetchAllOHLCVData request.")
+	var allData []OHLCVData
+
+	// Add 5 seconds to avoid losing data due to time difference
+	var toTs int64 = time.Now().Unix() + 5
 
 	for {
-		c.logger.Debug("Fetching more data in fetchAllOHLCVData. toTs: ", time.Unix(toTs, 0).In(time.UTC).Format(time.RFC3339))
+		c.logger.Debugf("Fetching more data for %s/%s in fetchAllOHLCVData, toTs: %s",
+			tradingSymbol, vsCurrency, time.Unix(toTs, 0).In(time.UTC).Format(time.RFC3339))
 
-		data, err := c.fetchOHLCVDataWithTs(tradingSymbol, vsCurrency, apiMaxLimit, endpoint, toTs)
+		url := fmt.Sprintf("%s/%s?fsym=%s&tsym=%s&limit=%d&toTs=%d&api_key=%s",
+			baseURL, endpoint, tradingSymbol, vsCurrency, apiMaxLimit, toTs, c.apiKey)
+		c.logger.Trace("URL: ", url)
+
+		resp, err := c.getOHLCVResponseFromApi(url)
 		if err != nil {
-			c.logger.Errorf("Error in fetchOHLCVDataWithTs: %v", err)
+			c.logger.Errorf("Error in getOHLCVResponseFromApi for %s/%s: %v", tradingSymbol, vsCurrency, err)
 			return nil, err
 		}
+
+		data := resp.Data.Data
 		if len(data) == 0 {
+			c.logger.Tracef("No more data to fetch OHLCV history for %s/%s in fetchAllOHLCVData", tradingSymbol, vsCurrency)
 			break
 		}
 
 		allData = append(allData, data...)
-		toTs = data[len(data)-1].Time
+		toTs = resp.Data.TimeFrom - 1
 
-		c.logger.Debug("Pause before next fetchAllOHLCVData iteration...")
+		c.logger.Debugf("Pause before next fetchAllOHLCVData iteration for %s/%s...", tradingSymbol, vsCurrency)
 		time.Sleep(10 * time.Second)
 	}
 
-	c.logger.Info("Completed fetchAllOHLCVData request.")
+	c.logger.Infof("Completed fetchAllOHLCVData request for %s/%s.", tradingSymbol, vsCurrency)
 	return allData, nil
 }
 
 func (c *Client) fetchOHLCVData(tradingSymbol, vsCurrency string, limit int, endpoint string) ([]OHLCVData, error) {
-	url := fmt.Sprintf("%s/%s?fsym=%s&tsym=%s&limit=%d&api_key=%s", baseURL, endpoint, tradingSymbol, vsCurrency, limit, c.apiKey)
-	return c.getOHLCVDataFromApi(url)
+	url := fmt.Sprintf("%s/%s?fsym=%s&tsym=%s&limit=%d&api_key=%s",
+		baseURL, endpoint, tradingSymbol, vsCurrency, limit, c.apiKey)
+
+	if resp, err := c.getOHLCVResponseFromApi(url); err != nil {
+		return nil, err
+	} else {
+		return resp.Data.Data, nil
+	}
 }
 
-func (c *Client) fetchOHLCVDataWithTs(tradingSymbol, vsCurrency string, limit int, endpoint string, toTs int64) ([]OHLCVData, error) {
-	url := fmt.Sprintf("%s/%s?fsym=%s&tsym=%s&limit=%d&toTs=%d&api_key=%s", baseURL, endpoint, tradingSymbol, vsCurrency, limit, toTs, c.apiKey)
-	return c.getOHLCVDataFromApi(url)
-}
-
-func (c *Client) getOHLCVDataFromApi(url string) ([]OHLCVData, error) {
+func (c *Client) getOHLCVResponseFromApi(url string) (*CryptoResponse, error) {
 	c.logger.Debugf("Fetching data from URL: %s", url)
 
 	resp, err := c.httpClient.Get(url)
@@ -150,5 +165,5 @@ func (c *Client) getOHLCVDataFromApi(url string) ([]OHLCVData, error) {
 
 	c.logger.Debugf("Successfully fetched data from URL: %s", url)
 
-	return cr.Data.Data, nil
+	return &cr, nil
 }
