@@ -47,7 +47,7 @@ func NewClient(apiKey string, logger *logrus.Logger) *Client {
 	return &Client{
 		apiKey:     apiKey,
 		httpClient: &http.Client{},
-		logger:     logrus.New(),
+		logger:     logger,
 	}
 }
 
@@ -70,19 +70,19 @@ func (c *Client) FetchDailyOHLCVData(tradingSymbol, vsCurrency string, limit int
 }
 
 // FetchAllAllMinuteOHLCVData fetches all minute-level OHLCV data
-func (c *Client) FetchAllAllMinuteOHLCVData(tradingSymbol, vsCurrency string, limit int) ([]OHLCVData, error) {
+func (c *Client) FetchAllAllMinuteOHLCVData(tradingSymbol, vsCurrency string) ([]OHLCVData, error) {
 	c.logger.Trace("Fetching all minute-level OHLCV data")
 	return c.fetchAllOHLCVData(tradingSymbol, vsCurrency, histominuteEndpoint)
 }
 
 // FetchAllHourlyOHLCVData fetches all available hourly-level OH// FetchAllHourlyOHLCVData fetches all available hourly-level OHLCV data from the CryptoCompare API.
-func (c *Client) FetchAllHourlyOHLCVData(tradingSymbol, vsCurrency string, limit int) ([]OHLCVData, error) {
+func (c *Client) FetchAllHourlyOHLCVData(tradingSymbol, vsCurrency string) ([]OHLCVData, error) {
 	c.logger.Trace("Initiating FetchAllHourlyOHLCVData request.")
 	return c.fetchAllOHLCVData(tradingSymbol, vsCurrency, histohourEndpoint)
 }
 
 // FetchAllDailyOHLCVData fetches all available daily-level OHLCV data from the CryptoCompare API.
-func (c *Client) FetchAllDailyOHLCVData(tradingSymbol, vsCurrency string, limit int) ([]OHLCVData, error) {
+func (c *Client) FetchAllDailyOHLCVData(tradingSymbol, vsCurrency string) ([]OHLCVData, error) {
 	c.logger.Trace("Initiating FetchAllDailyOHLCVData request.")
 	return c.fetchAllOHLCVData(tradingSymbol, vsCurrency, histodayEndpoint)
 }
@@ -95,7 +95,8 @@ func (c *Client) fetchAllOHLCVData(tradingSymbol, vsCurrency string, endpoint st
 	c.logger.Info("Starting fetchAllOHLCVData request.")
 
 	for {
-		c.logger.Debug("Fetching more data in fetchAllOHLCVData.")
+		c.logger.Debug("Fetching more data in fetchAllOHLCVData. toTs: ", time.Unix(toTs, 0).In(time.UTC).Format(time.RFC3339))
+
 		data, err := c.fetchOHLCVDataWithTs(tradingSymbol, vsCurrency, apiMaxLimit, endpoint, toTs)
 		if err != nil {
 			c.logger.Errorf("Error in fetchOHLCVDataWithTs: %v", err)
@@ -107,6 +108,9 @@ func (c *Client) fetchAllOHLCVData(tradingSymbol, vsCurrency string, endpoint st
 
 		allData = append(allData, data...)
 		toTs = data[len(data)-1].Time
+
+		c.logger.Debug("Pause before next fetchAllOHLCVData iteration...")
+		time.Sleep(10 * time.Second)
 	}
 
 	c.logger.Info("Completed fetchAllOHLCVData request.")
