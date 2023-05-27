@@ -75,13 +75,23 @@ func (c *Client) FetchDailyOHLCVData(tradingSymbol, vsCurrency string, limit int
 	return c.fetchOHLCVData(tradingSymbol, vsCurrency, limit, histodayEndpoint)
 }
 
-// FetchAllAllMinuteOHLCVData fetches all minute-level OHLCV data
+// FetchAllMinuteOHLCVData fetches all minute-level OHLCV data
 func (c *Client) FetchAllMinuteOHLCVData(tradingSymbol, vsCurrency string) ([]OHLCVData, error) {
 	c.logger.Trace("Fetching all minute-level OHLCV data")
-	return c.fetchAllOHLCVData(tradingSymbol, vsCurrency, histominuteEndpoint)
+	data, err := c.fetchAllOHLCVData(tradingSymbol, vsCurrency, histominuteEndpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	// remove last row if it's not ready yet
+	if len(data) > 0 && data[len(data)-1].VolumeFrom == decimal.Zero {
+		data = data[:len(data)-1]
+	}
+
+	return data, nil
 }
 
-// FetchAllHourlyOHLCVData fetches all available hourly-level OH// FetchAllHourlyOHLCVData fetches all available hourly-level OHLCV data from the CryptoCompare API.
+// FetchAllHourlyOHLCVData fetches all hourly-level OHLCV data
 func (c *Client) FetchAllHourlyOHLCVData(tradingSymbol, vsCurrency string) ([]OHLCVData, error) {
 	c.logger.Trace("Initiating FetchAllHourlyOHLCVData request.")
 	return c.fetchAllOHLCVData(tradingSymbol, vsCurrency, histohourEndpoint)
