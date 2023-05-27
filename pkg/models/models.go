@@ -8,8 +8,8 @@ import (
 
 type CryptoOHLCV struct {
 	ID            uint            `gorm:"primaryKey"`
-	TradingSymbol string          `gorm:"type:varchar(10);index:,unique,composite:tpair_ts;not null"`
-	VsCurrency    string          `gorm:"type:varchar(10);index:,unique,composite:tpair_ts;not null"`
+	TradingSymbol string          `gorm:"type:varchar(10);index:,unique,composite:tpair_ts;index:,composite:tpair;not null"`
+	VsCurrency    string          `gorm:"type:varchar(10);index:,unique,composite:tpair_ts;index:,composite:tpair;not null"`
 	Timestamp     time.Time       `gorm:"type:timestamptz;index:,unique,composite:tpair_ts;not null"`
 	Open          decimal.Decimal `gorm:"type:numeric;not null"`
 	High          decimal.Decimal `gorm:"type:numeric;not null"`
