@@ -60,7 +60,14 @@ func NewClient(apiKey string, logger *logrus.Logger) *Client {
 // FetchMinuteOHLCVData fetches minute-level OHLCV data up to given limit
 func (c *Client) FetchMinuteOHLCVData(tradingSymbol, vsCurrency string, limit int) ([]OHLCVData, error) {
 	c.logger.Trace("Fetching minute-level OHLCV data")
-	return c.fetchOHLCVData(tradingSymbol, vsCurrency, limit, histominuteEndpoint)
+
+	data, err := c.fetchOHLCVData(tradingSymbol, vsCurrency, limit, histominuteEndpoint)
+	if data != nil {
+		// remove last row if it's not ready yet
+		data = removeNotReadyData(data)
+	}
+
+	return data, err
 }
 
 // FetchHourlyOHLCVData fetches hourly-level OHLCV data up to given limit
