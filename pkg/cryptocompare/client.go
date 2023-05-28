@@ -84,9 +84,7 @@ func (c *Client) FetchAllMinuteOHLCVData(tradingSymbol, vsCurrency string) ([]OH
 	}
 
 	// remove last row if it's not ready yet
-	if len(data) > 0 && data[len(data)-1].VolumeFrom == decimal.Zero {
-		data = data[:len(data)-1]
-	}
+	data = removeNotReadyData(data)
 
 	return data, nil
 }
@@ -151,9 +149,7 @@ func (c *Client) fetchAllOHLCVData(tradingSymbol, vsCurrency string, endpoint st
 		return nil, err
 	}
 
-	sort.Slice(allData, func(i, j int) bool {
-		return allData[i].Time < allData[j].Time
-	})
+	sortByTime(allData)
 
 	if err != nil {
 		c.logger.Warnf("fetchAllOHLCVData request for %s/%s breaked early, return data it fetched so far, len: %d", tradingSymbol, vsCurrency, len(allData))
@@ -208,4 +204,22 @@ func isVolumeFromZeroInDataSet(data []OHLCVData) bool {
 		}
 	}
 	return true
+}
+
+func removeNotReadyData(data []OHLCVData) []OHLCVData {
+	if len(data) == 0 {
+		return data
+	}
+
+	if data[len(data)-1].VolumeFrom.Equal(decimal.Zero) {
+		return data[:len(data)-1]
+	}
+
+	return data
+}
+
+func sortByTime(data []OHLCVData) {
+	sort.Slice(data, func(i, j int) bool {
+		return data[i].Time < data[j].Time
+	})
 }
