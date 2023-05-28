@@ -181,6 +181,7 @@ func downloadWorker(downloadChannel chan downloadJob, saveChannel chan saveJob, 
 				data = removeInvalidOHLCVData(data)
 			}
 
+			log.Tracef("Sending %s data of %s/%s to saveChannel", job.timeframe, job.symbol, job.vsCurrency)
 			job.wg.Add(1)
 			saveChannel <- saveJob{
 				symbol:     job.symbol,

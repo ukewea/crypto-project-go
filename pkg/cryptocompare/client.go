@@ -79,14 +79,14 @@ func (c *Client) FetchDailyOHLCVData(tradingSymbol, vsCurrency string, limit int
 func (c *Client) FetchAllMinuteOHLCVData(tradingSymbol, vsCurrency string) ([]OHLCVData, error) {
 	c.logger.Trace("Fetching all minute-level OHLCV data")
 	data, err := c.fetchAllOHLCVData(tradingSymbol, vsCurrency, histominuteEndpoint)
-	if err != nil {
+	if data == nil && err != nil {
 		return nil, err
 	}
 
 	// remove last row if it's not ready yet
 	data = removeNotReadyData(data)
 
-	return data, nil
+	return data, err
 }
 
 // FetchAllHourlyOHLCVData fetches all hourly-level OHLCV data
