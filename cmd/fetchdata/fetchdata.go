@@ -41,6 +41,7 @@ func main() {
 	log.Out = os.Stdout
 	log.Level = logrus.DebugLevel
 
+	log.Trace("Reading config")
 	conf, err := config.ReadConfig("config.toml")
 	if err != nil {
 		log.Fatal("Error reading config: ")
@@ -61,10 +62,16 @@ func main() {
 	timeframes, limits := getTimeframesAndLimits(fetchAll, conf, log)
 	tradingSymbols := conf.Fetch.TradingSymbols
 	vsCurrency := conf.Fetch.VSCurrency
+	log.Tracef("timeframes: %v", timeframes)
+	log.Tracef("limits: %v", limits)
+	log.Tracef("tradingSymbols: %v", tradingSymbols)
+	log.Tracef("vsCurrency: %v", vsCurrency)
 
-	downloadChannel := make(chan downloadJob, 10)
-	saveChannel := make(chan saveJob, 10)
+	const channelSize int = 10
+	downloadChannel := make(chan downloadJob, channelSize)
+	saveChannel := make(chan saveJob, channelSize)
 	var wg sync.WaitGroup
+	log.Tracef("Creating channels of size %d", channelSize)
 
 	defer close(downloadChannel)
 	defer close(saveChannel)
@@ -74,6 +81,9 @@ func main() {
 
 	for _, symbol := range tradingSymbols {
 		for i, timeframe := range timeframes {
+			log.Tracef("Sending download job for %s/%s, timeframe: %s, limit: %d",
+				symbol, vsCurrency, timeframe, limits[i])
+
 			wg.Add(1)
 			downloadChannel <- downloadJob{
 				symbol:     symbol,
@@ -112,7 +122,8 @@ func getTimeframesAndLimits(fetchAll *bool, conf *config.Config, log *logrus.Log
 	tradingSymbols := conf.Fetch.TradingSymbols
 
 	if *fetchAll {
-		log.Warnf("Fetching all data for symbols: %v", tradingSymbols)
+		log.Infof("Fetching all data for symbols: %v", tradingSymbols)
+		log.Warnf("--fetch-all option is set to true, this may take a long time")
 		// set limits to -1 to fetch all data
 		limits = []int{-1, -1, -1}
 	} else {
